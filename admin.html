@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course App - Admin Panel</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet"/>
+
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #8E44AD; --primary-light: rgba(142, 68, 173, 0.1); --success: #27ae60; --danger: #e74c3c;
+        }
+        .light {
+            --bg-main: #f4f6f9; --bg-sidebar: #ffffff; --bg-surface: #ffffff; --text-primary: #1a1a1a; --text-secondary: #6c757d; --border-color: #e9ecef; --shadow: 0 4px 15px rgba(0, 0, 0, 0.07); --shadow-heavy: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .dark {
+            --bg-main: #171821; --bg-sidebar: #21222d; --bg-surface: #21222d; --text-primary: #E9F6FF; --text-secondary: #94A3B8; --border-color: #35374e; --shadow: 0 4px 20px rgba(0, 0, 0, 0.2); --shadow-heavy: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Poppins', sans-serif; background-color: var(--bg-main); color: var(--text-primary); -webkit-font-smoothing: antialiased; }
+        .hidden { display: none !important; }
+
+        /* --- Global Components & Buttons --- */
+        .btn { padding: 10px 18px; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; font-weight: 500; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-primary { background-color: var(--primary); color: white; }
+        .btn-secondary { background-color: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-color); }
+        .btn-success { background-color: var(--success); color: white; }
+        .btn-danger { background-color: var(--danger); color: white; }
+        .btn-delete-overlay { position: absolute; top: 10px; right: 10px; background-color: rgba(231, 76, 60, 0.8); color: white; backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.2); border-radius: 50%; width: 36px; height: 36px; padding: 0; font-size: 18px; }
+        .card { background-color: var(--bg-surface); border-radius: 12px; box-shadow: var(--shadow); transition: all 0.2s; border: 1px solid var(--border-color); }
+        .card:hover { transform: translateY(-5px); box-shadow: var(--shadow-heavy); }
+        h1, h2, h3, h4 { font-weight: 600; }
+        
+        /* --- Login Page --- */
+        #login-container { display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .login-box { background-color: #fff; padding: 40px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        .login-box input { width: 100%; padding: 15px; border: 1px solid #e0e0e0; border-radius: 12px; font-size: 16px; margin-bottom: 15px; }
+
+        /* --- Admin Layout --- */
+        #admin-panel { display: grid; grid-template-columns: 260px 1fr; height: 100vh; }
+        #sidebar { background-color: var(--bg-sidebar); padding: 20px; display: flex; flex-direction: column; border-right: 1px solid var(--border-color); }
+        .sidebar-header { margin-bottom: 30px; font-size: 24px; font-weight: 700; display: flex; align-items: center; gap: 10px; color: var(--primary); }
+        .nav-link { display: flex; align-items: center; gap: 15px; padding: 12px 15px; border-radius: 8px; margin-bottom: 5px; font-weight: 500; font-size: 16px; color: var(--text-secondary); text-decoration: none; }
+        .nav-link.active { background-color: var(--primary); color: white; }
+        #main-content { overflow-y: auto; }
+        .main-header { display: flex; justify-content: space-between; align-items: center; padding: 20px; background-color: var(--bg-surface); border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 99; }
+        #mobile-nav-toggle { display: none; background: transparent; color: var(--text-primary); font-size: 24px; border: none; }
+        .page-title { font-size: 24px; }
+        .content-area { padding: 20px; }
+        #header-actions { display: flex; gap: 10px; align-items: center; }
+        #header-actions .btn { padding: 8px 16px; font-size: 14px; }
+        .item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .no-data-row { text-align: center; padding: 40px; color: var(--text-secondary); grid-column: 1 / -1; }
+
+        /* --- Drag & Drop --- */
+        .drag-handle { cursor: grab; color: var(--text-secondary); padding: 5px; }
+        .sortable-ghost { opacity: 0.4; background: var(--primary-light); }
+        .sortable-chosen { box-shadow: var(--shadow-heavy); }
+
+        /* --- Specific Card Styles --- */
+        .category-card { padding: 20px; position: relative; display: flex; align-items: center; gap: 10px; }
+        .category-card-content { text-align: center; cursor: pointer; flex-grow: 1; }
+        .category-card img, .category-card .icon-placeholder { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; background-color: var(--primary-light); color: var(--primary); }
+        .card-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; }
+        .card-actions button { padding: 5px 8px; font-size: 14px; border-radius: 8px; color:white; }
+        .btn-edit { background-color: #007bff; }
+        .btn-delete { background-color: #dc3545; }
+        .btn-code { background-color: #28a745; }
+        
+        .course-card { display: flex; flex-direction: column; }
+        .course-card-header { display: flex; align-items: center; padding: 15px; gap: 10px; }
+        .course-card-img { width: 80px; height: 50px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+        .course-card-title { font-weight: 600; flex-grow: 1; }
+        .course-card-footer { border-top: 1px solid var(--border-color); padding: 10px 15px; display: flex; justify-content: flex-end; gap: 10px; }
+        .course-card-footer button { padding: 6px 12px; font-size: 14px; }
+        
+        .banner-card { position: relative; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; }
+        .banner-card img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .notification-card { padding: 20px; cursor: pointer; border-left: 4px solid #3498db; position: relative; }
+        .notification-card h3 { padding-right: 40px; }
+        
+        .user-card { display: flex; align-items: center; gap: 15px; padding: 15px; cursor: pointer; position: relative; }
+        .user-card-pic, .user-card-icon { width: 50px; height: 50px; border-radius: 50%; flex-shrink: 0; object-fit: cover; }
+        .user-card-icon { background-color: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 24px; }
+        .user-card-info { text-align: left; }
+        .user-card-info h3 { margin-bottom: 5px; }
+        .user-card-actions { margin-left: auto; display: flex; flex-direction: column; gap: 8px; }
+        .user-card-actions .btn { padding: 6px 12px; font-size: 13px; width: 80px; }
+
+        /* --- App Info Form --- */
+        #info-form { padding: 20px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 500; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background-color: var(--bg-main); color: var(--text-primary); font-size: 15px; }
+
+        /* --- Modals & Popups --- */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; display: flex; justify-content: center; align-items: center; padding: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+        .modal { background: var(--bg-surface); border-radius: 16px; width: 100%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column; transform: scale(0.95); transition: transform 0.3s; }
+        .modal-overlay.show .modal { transform: scale(1); }
+        .modal-header, .modal-footer { padding: 20px; border-bottom: 1px solid var(--border-color); }
+        .modal-footer { border-top: 1px solid var(--border-color); border-bottom: none; text-align: right; }
+        .modal-body { padding: 20px; overflow-y: auto; }
+        #modal-close-btn { background: transparent; color: var(--text-primary); padding: 0; border: none; font-size: 24px; }
+        .user-profile-pic-modal, .user-profile-icon-modal { width: 100px; height: 100px; border-radius: 50%; margin: 0 auto 15px; border: 3px solid var(--primary); display: block; }
+        .user-profile-pic-modal { object-fit: cover; }
+        .user-profile-icon-modal { display: flex; align-items: center; justify-content: center; font-size: 48px; background-color: var(--primary-light); }
+        .confirmation-box { max-width: 400px; text-align: center; }
+        #toast { position: fixed; bottom: -100px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 8px; color: white; font-weight: 500; z-index: 3000; transition: bottom 0.5s ease; }
+        #toast.show { bottom: 20px; }
+        
+        /* --- Responsive --- */
+        @media (max-width: 992px) { #admin-panel { grid-template-columns: 1fr; } #sidebar { position: fixed; left: -260px; top: 0; height: 100vh; z-index: 1001; transition: transform 0.3s; } body.sidebar-open #sidebar { transform: translateX(260px); } body.sidebar-open::before { content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; } #mobile-nav-toggle { display: block; } }
+    </style>
+</head>
+<body class="light">
+
+    <div id="login-container">
+        <div class="login-box"><h1>Admin Panel</h1><form id="login-form"><input type="email" id="email" placeholder="Email" required><input type="password" id="password" placeholder="Password" required><button type="submit" class="btn btn-primary" style="width:100%">Sign In</button></form></div>
+    </div>
+
+    <div id="admin-panel" class="hidden">
+        <aside id="sidebar">
+            <div class="sidebar-header"><i class="ri-sound-module-line"></i><span>Admin</span></div>
+            <nav class="sidebar-nav" style="flex-grow:1"><a href="#" class="nav-link active" data-panel="courses"><i class="ri-book-open-line"></i><span>Courses</span></a><a href="#" class="nav-link" data-panel="banners"><i class="ri-image-line"></i><span>Banners</span></a><a href="#" class="nav-link" data-panel="notifications"><i class="ri-notification-3-line"></i><span>Notifications</span></a><a href="#" class="nav-link" data-panel="users"><i class="ri-group-line"></i><span>Users</span></a><a href="#" class="nav-link" data-panel="info"><i class="ri-information-line"></i><span>App Info</span></a></nav>
+            <div class="sidebar-footer"><button id="theme-switcher" class="btn"><i class="ri-sun-line"></i></button><button id="logout-btn" class="btn btn-danger"><i class="ri-logout-box-r-line"></i></button></div>
+        </aside>
+
+        <main id="main-content">
+            <header class="main-header"><div style="display: flex; align-items: center; gap: 15px;"><button id="mobile-nav-toggle"><i class="ri-menu-line"></i></button><h1 id="page-title" class="page-title"></h1></div><div id="header-actions"></div></header>
+            <div id="content-area" class="content-area"></div>
+        </main>
+    </div>
+    
+    <div id="form-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header"><h3 id="modal-title" class="modal-title"></h3><button id="modal-close-btn"><i class="ri-close-line"></i></button></div>
+            <div class="modal-body" id="modal-body"></div>
+            <div class="modal-footer"><button id="modal-save-btn" class="btn btn-primary"><i class="ri-save-line"></i> Save</button></div>
+        </div>
+    </div>
+    <div id="confirmation-dialog" class="modal-overlay">
+        <div class="modal confirmation-box">
+            <div class="modal-body"><h3 id="confirmation-title"></h3><p id="confirmation-message"></p><div style="display:flex;gap:15px;justify-content:center;"><button id="confirm-btn-no" class="btn btn-secondary">Cancel</button><button id="confirm-btn-yes" class="btn btn-danger">Confirm</button></div></div>
+        </div>
+    </div>
+    <div id="toast"></div>
+
+    <script>
+        // --- Config & Globals ---
+        const firebaseConfig = {
+  apiKey: "AIzaSyC7pFl98p9EIAj-BclF7OYv1x_iOYy3zbU",
+  authDomain: "course15rd.firebaseapp.com",
+  databaseURL: "https://course15rd-default-rtdb.firebaseio.com",
+  projectId: "course15rd",
+  storageBucket: "course15rd.firebasestorage.app",
+  messagingSenderId: "623516099201",
+  appId: "1:623516099201:web:9a121ab9b465053a4ea380",
+  measurementId: "G-30RJRCE23B"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+        const IMGBB_API_KEY = "d489ce3d08c2c64662d1d3ce56d92392";
+        const auth = firebase.auth(), db = firebase.database();
+        const getEl = id => document.getElementById(id);
+        const contentArea = getEl('content-area'), headerActions = getEl('header-actions'), pageTitle = getEl('page-title');
+        const modal = getEl('form-modal'), modalTitle = getEl('modal-title'), modalBody = getEl('modal-body'), modalSaveBtn = getEl('modal-save-btn');
+        let state = { activePanel: null };
+        let listeners = {};
+
+        // --- Utilities ---
+        const showToast = (message, isError = false) => { const t = getEl('toast'); t.textContent = message; t.className = 'show'; t.style.backgroundColor = isError ? 'var(--danger)' : 'var(--success)'; setTimeout(() => t.classList.remove('show'), 2000); };
+        function showConfirmation(title, message, onConfirm) { const d = getEl('confirmation-dialog'); getEl('confirmation-title').textContent = title; getEl('confirmation-message').textContent = message; d.classList.add('show'); const btn = getEl('confirm-btn-yes'); const newBtn = btn.cloneNode(true); btn.parentNode.replaceChild(newBtn, btn); newBtn.onclick = () => { d.classList.remove('show'); onConfirm(); }; getEl('confirm-btn-no').onclick = () => d.classList.remove('show'); }
+        const openModal = (title) => { modalTitle.textContent = title; modal.classList.add('show'); modalSaveBtn.classList.remove('hidden'); };
+        const closeModal = () => modal.classList.remove('show');
+        async function uploadImage(file, button) { const o = button.innerHTML; button.disabled = true; button.innerHTML = '<i class="ri-loader-4-line ri-spin"></i>'; try { const fd = new FormData(); fd.append('image', file); const r = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: 'POST', body: fd }); const j = await r.json(); if (j.success) return j.data.url; else throw new Error(j.error.message); } catch (e) { showToast(`Upload failed: ${e.message}`, true); return null; } finally { button.disabled = false; button.innerHTML = o; } }
+
+        // --- Auth & Real-Time Data System ---
+        auth.onAuthStateChanged(user => { getEl('login-container').classList.toggle('hidden', !!user); getEl('admin-panel').classList.toggle('hidden', !user); if (user) initializeApp(); else detachAllListeners(); });
+        function initializeApp() { const nodes = ['categories', 'courses', 'banners', 'notifications', 'users', 'app_info']; nodes.forEach(node => attachListener(node)); if (!state.activePanel) navigateTo('courses'); }
+        function attachListener(node) { if (listeners[node]) listeners[node].off(); const ref = db.ref(node); ref.on('value', snapshot => { state[node] = snapshot.val() || {}; const currentBasePanel = state.activePanel ? state.activePanel.split('-')[0] : null; if (node === currentBasePanel || (currentBasePanel === 'courses' && ['categories', 'courses'].includes(node)) || (node === 'users' && currentBasePanel === 'users')) { renderCurrentPanel(); } }); listeners[node] = ref; }
+        function detachAllListeners() { Object.values(listeners).forEach(ref => ref.off()); listeners = {}; }
+        
+        // --- Navigation & Master Renderer ---
+        function navigateTo(panelName) { document.querySelector('.nav-link.active')?.classList.remove('active'); const newActiveLink = document.querySelector(`.nav-link[data-panel="${panelName.split('-')[0]}"]`); if(newActiveLink) newActiveLink.classList.add('active'); state.activePanel = panelName; renderCurrentPanel(); }
+        function renderCurrentPanel() { contentArea.innerHTML = '<div style="text-align:center;padding:40px;"><i class="ri-loader-4-line ri-spin" style="font-size:32px"></i></div>'; headerActions.innerHTML = ''; if (state.activePanel.startsWith('courses-')) { renderCourseListView(state.activePanel.split('-')[1]); } else { switch (state.activePanel) { case 'courses': renderCategoryView(); break; case 'banners': renderBannerPanel(); break; case 'notifications': renderNotificationPanel(); break; case 'users': renderUserPanel(); break; case 'info': renderInfoPanel(); break; } } }
+        
+        // --- Drag-and-Drop Handler ---
+        function makeSortable(element, type) { new Sortable(element, { handle: '.drag-handle', animation: 150, onEnd: (evt) => { const updates = {}; Array.from(evt.target.children).forEach((item, index) => { updates[`${type}/${item.dataset.id}/position`] = index; }); db.ref().update(updates).then(() => showToast('Order saved!', false)).catch(err => showToast(err.message, true)); } }); }
+
+        // --- Panel Renderers ---
+        function renderCategoryView() { if (!state.categories) return; pageTitle.textContent = 'Categories'; headerActions.innerHTML = `<button class="btn btn-primary" onclick="handleEdit('categories')"><i class="ri-add-line"></i> Add Category</button>`; const dataArray = Object.entries(state.categories).sort(([,a],[,b]) => (a.position || 0) - (b.position || 0)); if (dataArray.length === 0) { contentArea.innerHTML = `<div class="no-data-row">No categories found.</div>`; return; } let gridHtml = '<div class="item-grid" id="category-grid">'; dataArray.forEach(([id, cat]) => { const iconHtml = cat.iconUrl ? `<img src="${cat.iconUrl}">` : `<div class="icon-placeholder"><i class="ri-function-line"></i></div>`; gridHtml += `<div class="card category-card" data-id="${id}" data-name="${cat.name}"><i class="ri-drag-move-2-fill drag-handle"></i><div class="category-card-content">${iconHtml}<h3>${cat.name}</h3></div><div class="card-actions"><button class="btn btn-edit" data-type="categories" data-id="${id}"><i class="ri-pencil-line"></i></button><button class="btn btn-delete" data-type="categories" data-id="${id}"><i class="ri-delete-bin-line"></i></button></div></div>`; }); contentArea.innerHTML = gridHtml + '</div>'; makeSortable(getEl('category-grid'), 'categories'); }
+        function renderCourseListView(categoryName) { if (!state.courses) return; pageTitle.textContent = `${categoryName} Courses`; headerActions.innerHTML = `<button class="btn btn-secondary" onclick="navigateTo('courses')"><i class="ri-arrow-left-s-line"></i> Back</button><button class="btn btn-primary" onclick="handleEdit('courses', null, '${categoryName}')"><i class="ri-add-line"></i> Add Course</button>`; const dataArray = Object.entries(state.courses).filter(([,c]) => c.category === categoryName).sort(([,a],[,b]) => (a.position || 0) - (b.position || 0)); if (dataArray.length === 0) { contentArea.innerHTML = `<div class="no-data-row">No courses in this category.</div>`; return; } let gridHtml = '<div class="item-grid" id="course-grid">'; dataArray.forEach(([id, d]) => { gridHtml += `<div class="card course-card" data-id="${id}"><div class="course-card-header"><i class="ri-drag-move-2-fill drag-handle"></i><img src="${d.posterUrl}" class="course-card-img"><h3 class="course-card-title">${d.title}</h3></div><div class="course-card-footer">${renderCourseActions(id, d.type === 'paid')}</div></div>`; }); contentArea.innerHTML = gridHtml + '</div>'; makeSortable(getEl('course-grid'), 'courses'); }
+        function renderBannerPanel() { if (!state.banners) return; pageTitle.textContent = 'Banners'; headerActions.innerHTML = `<button class="btn btn-primary" onclick="handleEdit('banners')"><i class="ri-add-line"></i> Add Banner</button>`; const dataArray = Object.entries(state.banners).reverse(); if (dataArray.length === 0) { contentArea.innerHTML = `<div class="no-data-row">No banners found.</div>`; return; } contentArea.innerHTML = '<div class="item-grid">' + dataArray.map(([id, d]) => `<div class="banner-card card"><img src="${d.imageUrl}"><button class="btn btn-delete-overlay btn-delete" data-type="banners" data-id="${id}"><i class="ri-delete-bin-line"></i></button></div>`).join('') + '</div>'; }
+        function renderNotificationPanel() { if (!state.notifications) return; pageTitle.textContent = 'Notifications'; headerActions.innerHTML = `<button class="btn btn-primary" onclick="handleEdit('notifications')"><i class="ri-add-line"></i> Send Notification</button>`; const dataArray = Object.entries(state.notifications).reverse(); if (dataArray.length === 0) { contentArea.innerHTML = `<div class="no-data-row">No notifications sent.</div>`; return; } contentArea.innerHTML = '<div class="item-grid">' + dataArray.map(([id, d]) => `<div class="notification-card card" data-id="${id}"><h3>${d.title}</h3><button class="btn-delete-overlay btn-delete" data-type="notifications" data-id="${id}"><i class="ri-delete-bin-line"></i></button></div>`).join('') + '</div>'; }
+        function renderUserPanel() { if (!state.users) return; pageTitle.textContent = 'Users'; headerActions.innerHTML = ''; const dataArray = Object.entries(state.users).reverse(); if (dataArray.length === 0) { contentArea.innerHTML = `<div class="no-data-row">No users found.</div>`; return; } contentArea.innerHTML = '<div class="item-grid">' + dataArray.map(([id, d]) => { const picHtml = d.photoURL ? `<img src="${d.photoURL}" class="user-card-pic">` : `<div class="user-card-icon"><i class="ri-user-line"></i></div>`; const status = d.status || 'active'; const banButtonClass = status === 'banned' ? 'btn-success btn-unban' : 'btn-danger btn-ban'; const banButtonText = status === 'banned' ? 'Unban' : 'Ban'; return `<div class="user-card card" data-id="${id}">${picHtml}<div class="user-card-info"><h3>${d.name || 'Unnamed'}</h3><p class="text-secondary" style="font-size:13px;">${d.phone || 'N/A'}</p></div><div class="user-card-actions"><button class="btn ${banButtonClass}" data-type="users" data-id="${id}">${banButtonText}</button><button class="btn btn-secondary btn-delete" data-type="users" data-id="${id}"><i class="ri-delete-bin-line"></i></button></div></div>`; }).join('') + '</div>'; }
+        function renderInfoPanel() { if (!state.app_info) return; pageTitle.textContent = 'App Info'; headerActions.innerHTML = `<button form="info-form" type="submit" class="btn btn-primary"><i class="ri-save-line"></i> Save Info</button>`; const data = state.app_info; contentArea.innerHTML = `<form id="info-form" class="card"><div class="form-group"><label>About App <small>(HTML supported)</small></label><textarea id="info-about" rows="8">${data.about || ''}</textarea></div><div class="form-group"><label>Contact <small>(HTML supported)</small></label><textarea id="info-contact" rows="5">${data.contact || ''}</textarea></div></form>`; getEl('info-form').addEventListener('submit', e => { e.preventDefault(); db.ref('app_info').set({ about: getEl('info-about').value, contact: getEl('info-contact').value }).then(() => showToast('App Info Updated!')); }); }
+
+        // --- Event Delegation ---
+        getEl('login-form').addEventListener('submit', e => { e.preventDefault(); auth.signInWithEmailAndPassword(getEl('email').value, getEl('password').value).catch(err => showToast(err.message, true)); });
+        getEl('logout-btn').addEventListener('click', () => auth.signOut());
+        getEl('theme-switcher').addEventListener('click', () => { document.body.classList.toggle('dark'); document.body.classList.toggle('light'); getEl('theme-switcher').innerHTML = document.body.classList.contains('dark') ? '<i class="ri-moon-fill"></i>' : '<i class="ri-sun-line"></i>'; });
+        getEl('mobile-nav-toggle').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
+        getEl('modal-close-btn').addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => { if(e.target === modal) closeModal(); });
+        document.querySelector('.sidebar-nav').addEventListener('click', e => { const link = e.target.closest('.nav-link'); if (link) { e.preventDefault(); navigateTo(link.dataset.panel); if (window.innerWidth <= 992) document.body.classList.remove('sidebar-open'); } });
+        document.body.addEventListener('click', (e) => { const sidebar = getEl('sidebar'); const mobileNavToggle = getEl('mobile-nav-toggle'); if (document.body.classList.contains('sidebar-open') && e.target !== sidebar && !sidebar.contains(e.target) && e.target !== mobileNavToggle && !mobileNavToggle.contains(e.target)) { document.body.classList.remove('sidebar-open'); } });
+        contentArea.addEventListener('click', e => { const button = e.target.closest('button'); if (button) { const { type, id } = button.dataset; if (button.classList.contains('btn-edit')) handleEdit(type, id); if (button.classList.contains('btn-delete')) handleDelete(type, id); if (button.classList.contains('btn-code')) handleGenerateCodes(id); if (button.classList.contains('btn-ban') || button.classList.contains('btn-unban')) handleToggleBan(id); return; } const categoryCard = e.target.closest('.category-card-content'); if (categoryCard) { navigateTo(`courses-${categoryCard.parentElement.dataset.name}`); return; } const notificationCard = e.target.closest('.notification-card'); if (notificationCard && !e.target.closest('button')) { handleShowNotification(notificationCard.dataset.id); return; } const userCard = e.target.closest('.user-card'); if (userCard && !e.target.closest('button')) { handleShowUser(userCard.dataset.id); return; } });
+
+        // --- Action Handlers ---
+        function renderCourseActions(id, isPaid) { let a = `<button class="btn btn-edit" data-type="courses" data-id="${id}"><i class="ri-pencil-line"></i></button><button class="btn btn-delete" data-type="courses" data-id="${id}"><i class="ri-delete-bin-line"></i></button>`; if (isPaid) a += `<button class="btn btn-code" data-type="courses" data-id="${id}"><i class="ri-key-2-line"></i></button>`; return a; }
+        function handleDelete(type, id) { showConfirmation(`Delete this ${type.slice(0,-1)}?`, "This action cannot be undone.", () => { db.ref(`${type}/${id}`).remove().then(() => showToast('Deleted!')); }); }
+        function handleToggleBan(userId) { const user = state.users[userId]; if (!user) return; const currentStatus = user.status || 'active'; const newStatus = currentStatus === 'banned' ? 'active' : 'banned'; const actionText = newStatus === 'banned' ? 'banned' : 'unbanned'; db.ref(`users/${userId}/status`).set(newStatus).then(() => showToast(`User has been ${actionText}.`)).catch(err => showToast(`Error: ${err.message}`, true)); }
+        function handleShowNotification(id) { const n = state.notifications[id]; if (!n) return; modalBody.innerHTML = `<h4>${n.title}</h4><p style="white-space:pre-wrap;margin-top:15px;">${n.message}</p><hr style="margin:20px 0"><small>Sent: ${new Date(n.timestamp).toLocaleString()}</small>`; openModal('Notification Details'); modalSaveBtn.classList.add('hidden'); }
+        async function handleShowUser(id) { const u = state.users[id]; if (!u) return; const p = u.photoURL ? `<img src="${u.photoURL}" class="user-profile-pic-modal">` : `<div class="user-profile-icon-modal"><i class="ri-user-line"></i></div>`; let cHtml = '<h4>Purchased Courses:</h4><ul>'; const purchased = u.purchasedCourses ? Object.keys(u.purchasedCourses) : []; if(purchased.length > 0) { for(const cId of purchased) { const course = state.courses[cId]; if(course) cHtml += `<li><b>${course.title}</b></li>`; } } else { cHtml += '<li>No courses purchased.</li>'; } cHtml += '</ul>'; modalBody.innerHTML = `${p}<h3 style="text-align:center;">${u.name||'Unnamed'}</h3><p style="text-align:center; color: var(--text-secondary);">Phone: ${u.phone || 'Not Provided'}</p><hr style="margin:20px 0">${cHtml}`; openModal('User Details'); modalSaveBtn.classList.add('hidden'); }
+        async function handleGenerateCodes(courseId) { openModal('Generate Course Codes'); modalBody.innerHTML = `<div class="form-group"><label>Number of Codes to Generate</label><input type="number" id="num-codes-to-generate" value="1" min="1" max="100"></div><button id="generate-codes-btn" class="btn btn-primary">Generate Codes</button><div class="form-group" style="margin-top: 20px;"><label>Generated Codes (one per line)</label><textarea id="generated-codes-output" rows="10" readonly placeholder="Generated codes will appear here..."></textarea></div>`; modalSaveBtn.classList.add('hidden'); getEl('generate-codes-btn').onclick = async () => { const btn = getEl('generate-codes-btn'); const originalText = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> Generating...'; const numCodes = parseInt(getEl('num-codes-to-generate').value); if (isNaN(numCodes) || numCodes <= 0 || numCodes > 100) { showToast('Please enter a valid number between 1 and 100.', true); btn.disabled = false; btn.innerHTML = originalText; return; } const generatedCodes = []; const updates = {}; for (let i = 0; i < numCodes; i++) { const code = generateUniqueCode(); updates[`courses/${courseId}/secretCodes/${code}`] = { createdAt: firebase.database.ServerValue.TIMESTAMP, usedBy: null }; generatedCodes.push(code); } try { await db.ref().update(updates); getEl('generated-codes-output').value = generatedCodes.join('\n'); showToast(`${numCodes} codes generated successfully!`); } catch (error) { showToast(`Error generating codes: ${error.message}`, true); } finally { btn.disabled = false; btn.innerHTML = originalText; } }; }
+        function generateUniqueCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let result = ''; for (let i = 0; i < 8; i++) { result += chars.charAt(Math.floor(Math.random() * chars.length)); } return result; }
+        async function handleEdit(type, id = null, preselectedCategory = null) { const data = id ? (state[type] ? state[type][id] : {}) : {}; let formHtml = ''; switch(type) { case 'courses': const catOpts = Object.values(state.categories).sort((a,b)=>(a.position||0)-(b.position||0)).map(c => `<option value="${c.name}" ${data.category === c.name || (!id && preselectedCategory === c.name) ? 'selected' : ''}>${c.name}</option>`).join(''); formHtml = `<div class="form-group"><label>Title</label><input id="form-title" value="${data.title||''}"></div><div class="form-group"><label>Type</label><select id="form-type"><option value="free" ${data.type==='free'?'selected':''}>Free</option><option value="paid" ${data.type==='paid'?'selected':''}>Paid</option></select></div><div class="form-group"><label>Category</label><select id="form-category"><option value="">Uncategorized</option>${catOpts}</select></div><div id="price-fields" class="hidden"><div class="form-group"><label>MRP Price</label><input type="number" id="form-mrp-price" value="${data.mrpPrice||''}"> <span style="font-size: 0.9em; color: var(--text-secondary);">(e.g., 999)</span></div><div class="form-group"><label>Current Price</label><input type="number" id="form-current-price" value="${data.currentPrice||''}"> <span style="font-size: 0.9em; color: var(--text-secondary);">(e.g 99)</span></div></div><div class="form-group"><label>Poster</label><input type="file" id="form-poster" accept="image/*"></div><div class="form-group"><label>YouTube Iframe</label><textarea id="form-video">${data.videoUrl||''}</textarea></div><div class="form-group"><label>Description</label><textarea id="form-description" rows="5">${data.description||''}</textarea></div>`; break; case 'categories': formHtml = `<div class="form-group"><label>Name</label><input id="form-name" value="${data.name||''}"></div><div class="form-group"><label>Icon</label><input type="file" id="form-icon" accept="image/*"></div>`; break; case 'banners': formHtml = `<div class="form-group"><label>Banner Image</label><input type="file" id="form-image" accept="image/*" ${id?'':'required'}></div>`; break; case 'notifications': formHtml = `<div class="form-group"><label>Title</label><input id="form-title" value="${data.title||''}"></div><div class="form-group"><label>Message</label><textarea id="form-message" rows="4">${data.message||''}</textarea></div>`; break; } openModal(`${id ? 'Edit' : 'Add'} ${type.charAt(0).toUpperCase() + type.slice(1, -1)}`); modalBody.innerHTML = formHtml; const formTypeSelect = getEl('form-type'); const priceFieldsDiv = getEl('price-fields'); const togglePriceFields = () => { if (formTypeSelect && priceFieldsDiv) { priceFieldsDiv.classList.toggle('hidden', formTypeSelect.value !== 'paid'); } }; if (formTypeSelect) { formTypeSelect.addEventListener('change', togglePriceFields); togglePriceFields(); } modalSaveBtn.onclick = async () => { let newData = {}; try { switch(type) { case 'courses': const poster = getEl('form-poster').files[0]; if(poster) newData.posterUrl = await uploadImage(poster, modalSaveBtn); newData = {...newData, title:getEl('form-title').value, type:getEl('form-type').value, category:getEl('form-category').value, videoUrl:getEl('form-video').value, description:getEl('form-description').value }; if (newData.type === 'paid') { newData.mrpPrice = parseFloat(getEl('form-mrp-price').value) || 0; newData.currentPrice = parseFloat(getEl('form-current-price').value) || 0; if (newData.currentPrice <= 0) { throw new Error('Current Price must be greater than 0 for paid courses.'); } } else { newData.mrpPrice = null; newData.currentPrice = null; } if(!id){ newData.position = Date.now(); if(!newData.posterUrl) throw new Error('Poster is required'); } break; case 'categories': const icon = getEl('form-icon').files[0]; if(icon) newData.iconUrl = await uploadImage(icon, modalSaveBtn); newData.name = getEl('form-name').value; if(!id){ newData.position = Date.now(); if(!newData.iconUrl) throw new Error('Icon is required'); } break; case 'banners': const img = getEl('form-image').files[0]; if(img) newData.imageUrl = await uploadImage(img, modalSaveBtn); if(!id && !newData.imageUrl) throw new Error('Image is required'); break; case 'notifications': newData = {title:getEl('form-title').value, message:getEl('form-message').value, timestamp: Date.now()}; break; } const ref = db.ref(type); (id ? ref.child(id).update({...data, ...newData}) : ref.push(newData)).then(() => { showToast('Saved!'); closeModal(); }); } catch(e) { showToast(e.message, true); } }; }
+    </script>
+</body>
+</html>
